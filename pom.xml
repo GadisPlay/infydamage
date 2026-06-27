@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>me.gadisplay</groupId>
+    <artifactId>InfyDamage</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>InfyDamage</name>
+    <description>Motor de daño custom para PvP/PvE en servidores Paper del ecosistema Infinity. Reemplaza la mitigación vanilla de armadura/protección por una fórmula configurable que respeta la progresión real de equipo de Nexo y THEnchantments.</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <paper.api.version>1.21.11-R0.1-SNAPSHOT</paper.api.version>
+    </properties>
+
+    <repositories>
+        <!-- Paper API -->
+        <repository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+
+        <!-- Nexo -->
+        <repository>
+            <id>nexo-repo</id>
+            <url>https://repo.nexomc.com/releases</url>
+        </repository>
+
+        <!-- MythicMobs -->
+        <repository>
+            <id>lumine-repo</id>
+            <url>https://mvn.lumine.io/repository/maven-public/</url>
+        </repository>
+
+        <!--
+            THEnchantments NO tiene entrada acá: es un plugin del propio workspace
+            (C:\Users\PC\Desktop\InfyPlugins\ThEnchantments) que aplica los niveles
+            extendidos con meta.addEnchant(enchantment, level, true) — es decir, escribe
+            el nivel real directo en el dato vanilla estándar del encantamiento. InfyDamage
+            lee ese nivel con la API normal de Bukkit (ItemStack#getEnchantmentLevel),
+            sin necesitar la API ni el JAR de THEnchantments para nada.
+        -->
+    </repositories>
+
+    <dependencies>
+        <!-- Paper API -->
+        <dependency>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
+            <version>${paper.api.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===================== Soft integrations (provided, never shaded) ===================== -->
+
+        <!--
+            Nexo — armaduras/armas con atributos custom. Mismas exclusiones que en InfyContratos:
+            el POM publicado de Nexo declara transitivos en SNAPSHOT que no resuelven desde los
+            repos públicos configurados acá.
+        -->
+        <dependency>
+            <groupId>com.nexomc</groupId>
+            <artifactId>nexo</artifactId>
+            <version>1.7.3</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>team.unnamed</groupId>
+                    <artifactId>creative-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>team.unnamed</groupId>
+                    <artifactId>creative-serializer-minecraft</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>team.unnamed</groupId>
+                    <artifactId>creative-server</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>net.byteflux</groupId>
+                    <artifactId>libby-bukkit</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- MythicMobs — detección de daño de skills/mobs custom para scope (CONTEXT.md §9.3) -->
+        <dependency>
+            <groupId>io.lumine</groupId>
+            <artifactId>Mythic-Dist</artifactId>
+            <version>5.12.1</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!--
+            MythicCrucible — BLOQUEADO (IMPLEMENTATION_PLAN.md Fase 0/Fase 2). El POM publicado
+            por Lumine en https://mvn.lumine.io para io.lumine:MythicCrucible está roto en TODAS
+            las versiones probadas (2.2.0, 2.1.0): referencia un <parent> io.lumine:MythicCrucible-Plugin
+            con una property ${mythiccrucible.version} nunca resuelta en la publicación. No es algo
+            que se arregle bajando de versión. Para destrabarlo hace falta el JAR real (instalado
+            local vía mvn install:install-file con un POM propio, igual que se hizo con InfyCodex
+            en InfyContratos) o un stub de parent POM (frágil, no recomendado). El hook de
+            MythicCrucible queda sin compilar hasta entonces.
+        -->
+
+        <!-- JUnit 5 — tests de la fórmula pura (IMPLEMENTATION_PLAN.md Fase 3), sin Bukkit en runtime -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>${project.name}-${project.version}</finalName>
+
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>21</release>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

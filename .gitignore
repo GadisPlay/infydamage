@@ -1,0 +1,29 @@
+# Build
+target/
+*.jar
+!src/main/resources/**
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Maven wrapper (generated locally)
+.mvn/wrapper/maven-wrapper.jar
+
+# Tooling local
+.atl/
+
+# Archivos locales de prueba / notas sueltas
+armamento.yml
+Untitled

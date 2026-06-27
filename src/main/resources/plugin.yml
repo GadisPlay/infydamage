@@ -1,0 +1,22 @@
+name: InfyDamage
+version: '${project.version}'
+main: me.gadisplay.infydamage.InfyDamage
+api-version: '1.21'
+author: gadisplay
+description: Motor de daño custom para PvP/PvE en servidores Paper del ecosistema Infinity. Reemplaza la mitigación vanilla de armadura/protección por una fórmula configurable.
+
+softdepend:
+  - Nexo
+  - THEnchantments
+  - MythicMobs
+  - MythicCrucible
+
+commands:
+  infydamage:
+    description: Comando principal de InfyDamage.
+    usage: /infydamage <reload|simulate>
+
+permissions:
+  infydamage.admin:
+    description: Acceso total a los subcomandos de /infydamage (reload, simulate).
+    default: op

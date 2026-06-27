@@ -1,0 +1,96 @@
+# Infinity Combat Engine — InfyDamage
+# Todos estos valores se pueden cambiar en caliente con /infydamage reload — no hace falta reiniciar el servidor.
+#
+# Cómo leer este archivo:
+#   - El plugin lee el daño del atacante (BASE de vanilla: arma Nexo + Filo) y la defensa del
+#     defensor (Armadura + Toughness + Protección), aplica la fórmula exponencial y deja fuera pociones,
+#     críticos y resistencia (vanilla los aplica después).
+#   - Solo ataque cuerpo a cuerpo de jugadores (ENTITY_ATTACK). Mobs vanilla, mobs de
+#     MythicMobs y arcos/ballestas quedan 100% vanilla, sin que este plugin los toque.
+#   - Para probar un combo sin pegarle a nadie: /infydamage simulate <atacante> <defensor>
+
+combat-pacing:
+  # Multiplicador global: combates más largos con valores menores
+  # Ajuste fino del daño FINAL después de toda la mitigación custom.
+  # Se multiplica al resultado de la fórmula exponencial — no sustituye armadura ni Filo.
+  #   ↑ subir (ej. 0.7)  → todo el servidor pega más duro, mismo ratio entre tiers.
+  #   ↓ bajar (ej. 0.35) → combates más largos; curación y pociones ganan peso.
+  global-damage-modifier: 0.55
+
+formulas:
+  # DañoFinal = DañoEquipo × (attenuation ^ PuntosDefensa)
+  # PuntosDefensa = ArmaduraTotal + (ToughnessTotal × toughness-weight) + (SumaProtección × protection-weight)
+
+  # Qué tan rápido crece la defensa por cada punto acumulado. Es el control principal del tanqueo.
+  # Cuanto más cerca de 1.0, menos reduce cada punto extra de armadura/protección/dureza.
+  #   ↑ acercar a 1.0 (ej. 0.990) → armaduras altas mitigan menos; más daño en endgame.
+  #   ↓ alejar de 1.0 (ej. 0.960) → armaduras altas mitigan mucho más; casi inmunidad.
+  # Nota: con sets de 70–90 PuntosDefensa, un cambio de 0.003 aquí se nota mucho.
+  attenuation-factor: 0.984
+
+  # Peso de la encantamiento Protección al sumar PuntosDefensa (nivel real × este peso).
+  # Prot VII en 4 piezas = 28 niveles → con 0.9 aporta 25.2 pts de defensa extra a la fórmula.
+  #   ↑ subir → Protección VII–X protege más; híbridos con Prot alto se vuelven muy tank.
+  #   ↓ bajar → la diferencia entre Prot V y Prot VII se nota menos en la fórmula.
+  protection-weight: 0.9
+
+  # Peso del atributo ARMOR_TOUGHNESS (dureza) de Nexo al sumar PuntosDefensa.
+  # Un set con 20 toughness total y peso 0.5 aporta 10 pts; con peso 1.0 aportaría 20.
+  #   ↑ subir → sets con mucha dureza (Warden, End, Doroteo) se vuelven más tanques.
+  #   ↓ bajar → la dureza del ítem importa menos; Protección y Armadura mandan más.
+  toughness-weight: 0.5   # pendiente de calibrar con pruebas de balance
+
+  # Límites de seguridad
+  # Piso de daño por golpe cuando SÍ pasa por la fórmula (ver weapon-damage-threshold abajo).
+  # Evita que dos jugadores full endgame se peguen 0 de daño por redondeo o defensa extrema.
+  # Solo aplica a armas reales cuyo BASE supere el umbral — puño/manzana quedan fuera.
+  #   ↑ subir (ej. 1.0) → mínimo medio corazón por golpe de arma; PvP más rápido.
+  #   ↓ bajar (ej. 0.25) → permite golpes muy débiles; combates más tácticos/largos.
+  minimum-damage-per-hit: 0.5   # Ningún golpe normal < ¼ corazón
+
+sharpness:
+  # Filo usa la curva vanilla (0.5 × nivel + 0.5), calculada por InfyDamage
+  # a partir del nivel real leído por API — sin tope, sin depender del evento.
+  # Solo afecta al comando /infydamage simulate (no hay evento real). En combate real el Filo
+  # ya viene incluido en DamageModifier.BASE de vanilla — no hace falta recalcularlo.
+  use-vanilla-formula: true
+
+scope:
+  # Tipos de daño que pasan por la fórmula custom
+  # Causas de daño que InfyDamage intercepta. Las demás (caída, fuego, veneno, lava,
+  # proyectiles…) quedan 100% vanilla — arcos/ballestas no se tocan a propósito
+  # (decisión del dueño del server: que se comporten igual que en Minecraft vanilla).
+  #   ENTITY_ATTACK → espadas, hachas, puños (si superan el umbral), tridentes, etc.
+  apply-to:
+    - ENTITY_ATTACK
+  # Daño ambiental, fuego, caída, proyectiles, etc. → vanilla sin interceptar
+
+  # Umbral mínimo de daño base (vanilla) para que un golpe pase por la fórmula custom.
+  # 1.0 = la base de puño vacío. Pegar con la mano, una manzana, un bloque o un
+  # proyectil sin fuerza (snowball, flecha sin carga) queda en o por debajo de este
+  # valor y se deja 100% en manos de vanilla — así minimum-damage-per-hit no sube
+  # artificialmente golpes que no son de un arma real (CONTEXT.md §6.1).
+  # Si BASE del golpe es ≤ este valor → InfyDamage no toca el evento (mitigación vanilla pura).
+  # Si BASE es > este valor → entra la fórmula custom + minimum-damage-per-hit.
+  #   ↑ subir (ej. 4.0) → solo espadas/hachas con buen daño Nexo entran; herramientas débiles quedan vanilla.
+  #   ↓ bajar (ej. 0.5) → casi todo ENTITY_ATTACK pasa por la fórmula, incluido puño con piso artificial.
+  weapon-damage-threshold: 1.0
+
+overrides:
+  # Cap de protección efectiva por ítem Nexo específico (CONTEXT.md §3.1: casos híbridos,
+  # ej. Netherite + Protección X, que en vanilla mitigan igual que un set real del End).
+  # Si un ítem no aparece acá, se usa su nivel de Protección real, sin cap.
+  # Formato: <id_nexo_del_item>: <nivel_máximo_efectivo>
+  # Ejemplo: un casco híbrido con Prot X pero que solo debe contar como Prot VII en la fórmula.
+  protection-cap-by-item-id: {}
+    # ejemplo:
+    # special_hybrid_helmet: 7
+
+mythicmobs-scope:
+  # NONE: la fórmula custom aplica igual, sea o no un mob de MythicMobs (default).
+  # WHITELIST: solo los tipos listados en mob-types pasan por la fórmula; el resto, vanilla.
+  # BLACKLIST: los tipos listados en mob-types se quedan en vanilla; el resto pasa por la fórmula.
+  # Útil si un boss Mythic tiene daño de skill muy alto y no quieres que la fórmula lo aplaste,
+  # o si quieres que solo ciertos mobs custom usen el balance de Infinity.
+  mode: NONE
+  mob-types: []
