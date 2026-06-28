@@ -27,3 +27,7 @@ Thumbs.db
 # Archivos locales de prueba / notas sueltas
 armamento.yml
 Untitled
+
+# Documentacion interna de seguimiento (no es para el repo publico)
+CONTEXT.md
+IMPLEMENTATION_PLAN.md
