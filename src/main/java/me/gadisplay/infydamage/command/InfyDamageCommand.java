@@ -104,5 +104,30 @@ public final class InfyDamageCommand extends BaseCommand {
                 return String.format("%.2f", value);
             }
         });
+
+        registerSubCommand(new SubCommand() {
+            @Override
+            public String getName() {
+                return "debug";
+            }
+
+            @Override
+            public String getPermission() {
+                return "infydamage.admin";
+            }
+
+            @Override
+            public String getDescription() {
+                return "Activa/desactiva el log de consola con el desglose real de cada golpe (PROBLEMS.md).";
+            }
+
+            @Override
+            public void execute(CommandSender sender, String[] args) {
+                boolean enabled = !plugin.getDebugState().isEnabled();
+                plugin.getDebugState().setEnabled(enabled);
+                sender.sendMessage((enabled ? ChatColor.GREEN : ChatColor.RED)
+                        + "[InfyDamage] Debug de combate " + (enabled ? "activado" : "desactivado") + ".");
+            }
+        });
     }
 }

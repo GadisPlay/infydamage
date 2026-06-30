@@ -2,9 +2,11 @@ package me.gadisplay.infydamage;
 
 import me.gadisplay.infydamage.command.InfyDamageCommand;
 import me.gadisplay.infydamage.config.ConfigManager;
+import me.gadisplay.infydamage.debug.DebugState;
 import me.gadisplay.infydamage.hook.HookManager;
 import me.gadisplay.infydamage.hook.impl.MythicMobsHook;
 import me.gadisplay.infydamage.listener.CombatDamageListener;
+import me.gadisplay.infydamage.listener.CombatDebugListener;
 import me.gadisplay.infydamage.listener.MythicTrueDamageListener;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -14,6 +16,7 @@ public final class InfyDamage extends JavaPlugin {
 
     private ConfigManager configManager;
     private HookManager hookManager;
+    private final DebugState debugState = new DebugState();
 
     @Override
     public void onEnable() {
@@ -38,6 +41,8 @@ public final class InfyDamage extends JavaPlugin {
             getServer().getPluginManager().registerEvents(mythicTrueDamageListener, this);
         }
         getServer().getPluginManager().registerEvents(new CombatDamageListener(this, mythicTrueDamageListener), this);
+        // Solo loguea cuando DebugState está activo (/infydamage debug) — ver PROBLEMS.md.
+        getServer().getPluginManager().registerEvents(new CombatDebugListener(this), this);
         new InfyDamageCommand(this).register(this, "infydamage");
 
         getLogger().info("InfyDamage habilitado.");
@@ -58,5 +63,9 @@ public final class InfyDamage extends JavaPlugin {
 
     public HookManager getHookManager() {
         return hookManager;
+    }
+
+    public DebugState getDebugState() {
+        return debugState;
     }
 }

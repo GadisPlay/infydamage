@@ -14,9 +14,9 @@ softdepend:
 commands:
   infydamage:
     description: Comando principal de InfyDamage.
-    usage: /infydamage <reload|simulate>
+    usage: /infydamage <reload|simulate|debug>
 
 permissions:
   infydamage.admin:
-    description: Acceso total a los subcomandos de /infydamage (reload, simulate).
+    description: Acceso total a los subcomandos de /infydamage (reload, simulate, debug).
     default: op

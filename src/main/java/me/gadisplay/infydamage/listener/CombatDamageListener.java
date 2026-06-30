@@ -2,6 +2,8 @@ package me.gadisplay.infydamage.listener;
 
 import me.gadisplay.infydamage.InfyDamage;
 import me.gadisplay.infydamage.config.DamageFormulaConfig;
+import me.gadisplay.infydamage.debug.CombatDebugRecorder;
+import me.gadisplay.infydamage.debug.CombatDebugSnapshot;
 import me.gadisplay.infydamage.formula.DamageFormula;
 import me.gadisplay.infydamage.formula.EquipmentReader;
 import me.gadisplay.infydamage.formula.VanillaExtras;
@@ -15,6 +17,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageModifier;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 /**
  * Reemplaza la mitigación de armadura/protección vanilla por la fórmula custom
@@ -27,13 +31,17 @@ import org.bukkit.event.entity.EntityDamageEvent.DamageModifier;
  * extras se perderían en silencio. El bug real de CONTEXT.md §2 está únicamente en
  * ARMOR y MAGIC — los dos modifiers que vanilla capa a 20 puntos.</p>
  *
- * <p><b>El resultado final NO se aplica vía {@code DamageModifier} (CONTEXT.md §13):</b>
- * esa API está deprecada por Paper y no sincroniza de forma confiable el descuento real
- * de Resistencia/Absorción cuando otro modifier del mismo evento (ARMOR/MAGIC) fue
- * reemplazado — los corazones amarillos de la manzana dorada/encantada quedaban sin
- * descontarse nunca. En vez de eso, el evento se cancela y el daño final se aplica a
- * mano con {@link VanillaExtras#applyResistanceAndAbsorption} + {@code setHealth},
- * replicando Resistencia y Absorción reales del defensor.</p>
+ * <p><b>Resistencia y Absorción se calculan a mano, no se dejan "sin tocar" (CONTEXT.md §13):</b>
+ * dejar esos dos modifiers intactos (como hacía la versión anterior) no funciona en Paper
+ * moderno — el descuento real de {@code getAbsorptionAmount()} no se sincroniza de forma
+ * confiable cuando ARMOR/MAGIC del mismo evento fueron reemplazados por un plugin, y los
+ * corazones amarillos de la manzana dorada/encantada quedaban sin descontarse nunca.
+ * {@link VanillaExtras#applyResistanceAndAbsorption} hace ese cálculo a mano (mutando
+ * {@code absorptionAmount} real) y el resultado se mete en {@code MAGIC}; {@code RESISTANCE}
+ * y {@code ABSORPTION} del evento se fuerzan a {@code 0} para que vanilla no los vuelva a
+ * aplicar encima. <b>El evento ya NO se cancela</b> — cancelarlo (versión anterior) sí
+ * resolvía la absorción, pero también anulaba TODO el pipeline de golpe vanilla (knockback,
+ * sonido, parpadeo de daño), no solo la mitigación que se quería anular.</p>
  *
  * <p><b>El atacante siempre tiene que ser un jugador</b> (CONTEXT.md §6.1.3): un Zombie,
  * un Warden o un mob de MythicMobs pegando NO pasan por esta fórmula — su daño es 100%
@@ -101,23 +109,32 @@ public final class CombatDamageListener implements Listener {
         double defensePoints = formula.defensePoints(armorTotal, toughnessTotal, protectionSum);
         double mitigatedDamage = formula.mitigatedDamage(baseDamage, defensePoints);
 
-        // Resistencia y Absorción reales del defensor, replicadas a mano (CONTEXT.md §13) —
-        // el evento se cancela en vez de seguir usando DamageModifier para el resultado final.
+        // Snapshot para /infydamage debug (PROBLEMS.md): se toma ANTES de mutar absorción,
+        // gateado por el flag para no pagar ni estos dos getters cuando nadie está debuggeando.
+        boolean debugEnabled = plugin.getDebugState().isEnabled();
+        double absorptionBefore = debugEnabled ? defender.getAbsorptionAmount() : 0.0;
+        double healthBefore = debugEnabled ? defender.getHealth() : 0.0;
+
+        // Resistencia y Absorción reales del defensor, calculadas a mano (CONTEXT.md §13) y
+        // metidas en MAGIC junto con el resto de la reducción custom — el evento NO se cancela,
+        // así que vanilla sigue aplicando knockback/sonido/parpadeo de daño después de esto.
         double finalDamage = VanillaExtras.applyResistanceAndAbsorption(defender, mitigatedDamage);
 
-        event.setCancelled(true);
-
-        if (finalDamage > 0.0) {
-            // Invulnerability ticks estándar de jugador — se pierde al cancelar el evento.
-            defender.setNoDamageTicks(20);
-            defender.setHealth(Math.max(0.0, defender.getHealth() - finalDamage));
-            // NOTA (CONTEXT.md §13): cancelar el evento aborta el pipeline de daño de NMS
-            // completo, no solo los modifiers de Bukkit — esto puede perder la atribución
-            // de muerte ("X fue asesinado por Y") y el knockback/sonido de golpe. No hay
-            // API pública de reemplazo (Entity#setLastDamageCause quedó deprecada "for
-            // removal, internal use only" sin alternativa). Pendiente de confirmar en
-            // testing manual in-game antes de cerrar el bug — ver IMPLEMENTATION_PLAN.md.
+        if (debugEnabled) {
+            PotionEffect resistance = defender.getPotionEffect(PotionEffectType.RESISTANCE);
+            CombatDebugRecorder.record(defender.getUniqueId(), new CombatDebugSnapshot(
+                    event.getDamager().getName(), defender.getName(), baseDamage, armorTotal, toughnessTotal,
+                    protectionSum, defensePoints, mitigatedDamage, absorptionBefore,
+                    resistance != null ? resistance.getAmplifier() : -1, finalDamage,
+                    defender.getAbsorptionAmount(), healthBefore));
         }
+
+        event.setDamage(DamageModifier.ARMOR, 0.0);
+        // Se fuerzan a 0: ya se aplicaron a mano arriba, dejarlos "sin tocar" es lo que
+        // causaba que getAbsorptionAmount() nunca se descontara (ver CONTEXT.md §13).
+        event.setDamage(DamageModifier.RESISTANCE, 0.0);
+        event.setDamage(DamageModifier.ABSORPTION, 0.0);
+        event.setDamage(DamageModifier.MAGIC, finalDamage - baseDamage);
     }
 
     /**
